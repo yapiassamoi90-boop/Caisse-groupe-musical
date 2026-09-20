@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Caisse Groupe Musical</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#ec4899">
+  <!-- Librairies CDN pour le QR Code et le Scanner -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+</head>
+<body>
+
+  <!-- En-tête -->
+  <header class="app-header">
+    <div class="header-content">
+      <h1>🎵 Caisse Musique</h1>
+      <span class="dev-badge">Dev.Assamoi</span>
+    </div>
+  </header>
+
+  <!-- Navigation par onglets -->
+  <nav class="app-nav">
+    <button class="nav-btn active" onclick="switchTab('tab-home')">📊 Tableau</button>
+    <button class="nav-btn" onclick="switchTab('tab-scan')">📷 Scanner</button>
+    <button class="nav-btn" onclick="switchTab('tab-members')">👥 Membres</button>
+    <button class="nav-btn" onclick="switchTab('tab-history')">📜 Historique</button>
+  </nav>
+
+  <main class="app-container">
+
+    <!-- TAB 1 : TABLEAU DE BORD -->
+    <section id="tab-home" class="tab-content active">
+      <div class="stats-grid">
+        <div class="stat-card primary">
+          <span class="stat-label">Total en Caisse</span>
+          <span class="stat-value" id="stat-total">0 FCFA</span>
+        </div>
+        <div class="stat-card success">
+          <span class="stat-label">À jour aujourd'hui</span>
+          <span class="stat-value" id="stat-paid-count">0</span>
+        </div>
+        <div class="stat-card warning">
+          <span class="stat-label">En attente</span>
+          <span class="stat-value" id="stat-pending-count">0</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Derniers paiements</h3>
+        <div id="recent-payments-list" class="list-container">
+          <p class="empty-msg">Aucun paiement enregistré pour l'instant.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2 : SCANNER DE QR CODE -->
+    <section id="tab-scan" class="tab-content">
+      <div class="card text-center">
+        <h2>Paiement Rapide par QR Code</h2>
+        <p class="subtitle">Scannez le badge du membre pour encaisser</p>
+        
+        <div id="qr-reader" style="width: 100%; max-width: 400px; margin: 15px auto;"></div>
+        
+        <div id="scan-result-card" class="scan-result hidden">
+          <h3 id="scanned-member-name">Nom du membre</h3>
+          <p id="scanned-member-status" class="status-badge"></p>
+          
+          <div class="amount-selector">
+            <p><strong>Choisir le montant :</strong></p>
+            <div class="amount-buttons">
+              <button onclick="setAmount(100)" class="btn-amount active">100 F (1 dim)</button>
+              <button onclick="setAmount(500)" class="btn-amount">500 F (1 mois)</button>
+              <button onclick="setAmount(1200)" class="btn-amount">1 200 F (3 mois)</button>
+              <button onclick="setAmount(5200)" class="btn-amount">5 200 F (1 an)</button>
+            </div>
+            <input type="number" id="custom-amount" value="100" placeholder="Autre montant" min="100" step="100">
+          </div>
+
+          <button id="btn-confirm-payment" class="btn-primary full-width" onclick="confirmScannedPayment()">Valider le Paiement</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3 : GESTION DES MEMBRES -->
+    <section id="tab-members" class="tab-content">
+      <div class="card">
+        <h3>Ajouter un nouveau membre</h3>
+        <form id="form-add-member" onsubmit="handleAddMember(event)">
+          <div class="form-group">
+            <input type="text" id="member-name-input" placeholder="Nom et Prénom du membre" required>
+            <button type="submit" class="btn-primary">Ajouter</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="card-header-flex">
+          <h3>Liste des membres</h3>
+          <input type="text" id="search-member" placeholder="Rechercher..." oninput="renderMembers()">
+        </div>
+        <div id="members-list" class="list-container"></div>
+      </div>
+    </section>
+
+    <!-- TAB 4 : HISTORIQUE DES TRANSACTIONS -->
+    <section id="tab-history" class="tab-content">
+      <div class="card">
+        <h3>Historique Complet</h3>
+        <div id="full-history-list" class="list-container"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Modal d'affichage du QR Code -->
+  <div id="qr-modal" class="modal hidden">
+    <div class="modal-content">
+      <span class="close-btn" onclick="closeQrModal()">&times;</span>
+      <h3 id="modal-member-name">QR Code du Membre</h3>
+      <div id="qrcode-container"></div>
+      <p class="subtitle">Faites une capture d'écran ou enregistrez l'image pour la partager au membre sur WhatsApp.</p>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
