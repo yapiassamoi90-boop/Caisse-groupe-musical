@@ -4,137 +4,186 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Caisse Groupe Musical</title>
+  
+  <!-- Feuille de style et Manifest PWA -->
   <link rel="stylesheet" href="style.css">
   <link rel="manifest" href="manifest.json">
   
-  <!-- Couleur de thème mobile -->
+  <!-- Couleur du thème mobile -->
   <meta name="theme-color" content="#db2777">
 
-  <!-- Optimisation PWA iOS Apple -->
+  <!-- Compatibility iOS Apple -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Cotisations">
   <link rel="apple-touch-icon" href="icon-192.png">
 
-  <!-- Librairies CDN pour le QR Code et le Scanner -->
+  <!-- Firebase SDK Compat (Pour la synchronisation en temps réel) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+  <!-- Librairies CDN pour la génération et le scan des QR Codes -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
 <body>
 
-  <!-- En-tête -->
-  <header class="app-header">
-    <div class="header-content">
-      <h1>🎵 Caisse Musique</h1>
-      <span class="dev-badge">Dev.Assamoi</span>
-    </div>
-  </header>
-
-  <!-- Navigation par onglets -->
-  <nav class="app-nav">
-    <button class="nav-btn active" onclick="switchTab('tab-home', event)">📊 Tableau</button>
-    <button class="nav-btn" onclick="switchTab('tab-scan', event)">📷 Scanner</button>
-    <button class="nav-btn" onclick="switchTab('tab-members', event)">👥 Membres</button>
-    <button class="nav-btn" onclick="switchTab('tab-history', event)">📜 Historique</button>
-  </nav>
-
-  <main class="app-container">
-
-    <!-- TAB 1 : TABLEAU DE BORD -->
-    <section id="tab-home" class="tab-content active">
-      <div class="stats-grid">
-        <div class="stat-card primary">
-          <span class="stat-label">Total en Caisse</span>
-          <span class="stat-value" id="stat-total">0 FCFA</span>
-        </div>
-        <div class="stat-card success">
-          <span class="stat-label">À jour aujourd'hui</span>
-          <span class="stat-value" id="stat-paid-count">0</span>
-        </div>
-        <div class="stat-card warning">
-          <span class="stat-label">En attente</span>
-          <span class="stat-value" id="stat-pending-count">0</span>
-        </div>
+  <!-- ÉCRAN DE DÉVERROUILLAGE PAR CODE PIN -->
+  <div id="pin-screen" class="pin-screen-overlay">
+    <div class="pin-card">
+      <div class="lock-icon">🔒</div>
+      <h2>Caisse Musique</h2>
+      <p>Entrez le code d'accès pour continuer</p>
+      
+      <div class="pin-input-group">
+        <input type="password" id="pin-input" maxlength="6" placeholder="****" pattern="[0-9]*" inputmode="numeric">
+        <button onclick="checkPinCode()" class="btn-primary">Déverrouiller</button>
       </div>
-
-      <div class="card">
-        <h3>Derniers paiements</h3>
-        <div id="recent-payments-list" class="list-container">
-          <p class="empty-msg">Aucun paiement enregistré pour l'instant.</p>
-        </div>
-      </div>
-    </section>
-
-    <!-- TAB 2 : SCANNER DE QR CODE -->
-    <section id="tab-scan" class="tab-content">
-      <div class="card text-center">
-        <h2>Paiement Rapide par QR Code</h2>
-        <p class="subtitle">Scannez le badge du membre pour encaisser</p>
-        
-        <div id="qr-reader" style="width: 100%; max-width: 400px; margin: 15px auto;"></div>
-        
-        <div id="scan-result-card" class="scan-result hidden">
-          <h3 id="scanned-member-name">Nom du membre</h3>
-          <p id="scanned-member-status" class="status-badge"></p>
-          
-          <div class="amount-selector">
-            <p><strong>Choisir le montant :</strong></p>
-            <div class="amount-buttons">
-              <button onclick="setAmount(100, event)" class="btn-amount active">100 F (1 dim)</button>
-              <button onclick="setAmount(500, event)" class="btn-amount">500 F (1 mois)</button>
-              <button onclick="setAmount(1200, event)" class="btn-amount">1 200 F (3 mois)</button>
-              <button onclick="setAmount(5200, event)" class="btn-amount">5 200 F (1 an)</button>
-            </div>
-            <input type="number" id="custom-amount" value="100" placeholder="Autre montant" min="100" step="100">
-          </div>
-
-          <button id="btn-confirm-payment" class="btn-primary full-width" onclick="confirmScannedPayment()">Valider le Paiement</button>
-        </div>
-      </div>
-    </section>
-
-    <!-- TAB 3 : GESTION DES MEMBRES -->
-    <section id="tab-members" class="tab-content">
-      <div class="card">
-        <h3>Ajouter un nouveau membre</h3>
-        <form id="form-add-member" onsubmit="handleAddMember(event)">
-          <div class="form-group">
-            <input type="text" id="member-name-input" placeholder="Nom et Prénom du membre" required>
-            <button type="submit" class="btn-primary">Ajouter</button>
-          </div>
-        </form>
-      </div>
-
-      <div class="card">
-        <div class="card-header-flex">
-          <h3>Liste des membres</h3>
-          <input type="text" id="search-member" placeholder="Rechercher..." oninput="renderMembers()">
-        </div>
-        <div id="members-list" class="list-container"></div>
-      </div>
-    </section>
-
-    <!-- TAB 4 : HISTORIQUE DES TRANSACTIONS -->
-    <section id="tab-history" class="tab-content">
-      <div class="card">
-        <h3>Historique Complet</h3>
-        <div id="full-history-list" class="list-container"></div>
-      </div>
-    </section>
-
-  </main>
-
-  <!-- Modal d'affichage du QR Code -->
-  <div id="qr-modal" class="modal hidden">
-    <div class="modal-content">
-      <span class="close-btn" onclick="closeQrModal()">&times;</span>
-      <h3 id="modal-member-name">QR Code du Membre</h3>
-      <div id="qrcode-container"></div>
-      <p class="subtitle">Faites une capture d'écran ou enregistrez l'image pour la partager au membre sur WhatsApp.</p>
+      <p id="pin-error-msg" class="error-msg hidden">Code incorrect. Réessayez.</p>
     </div>
   </div>
 
-  <!-- Script principal configuré en module pour Firestore -->
-  <script type="module" src="app.js"></script>
+  <!-- APPLICATION PRINCIPALE (Masquée par défaut tant que le PIN n'est pas validé) -->
+  <div id="main-app" class="app-hidden">
+
+    <!-- En-tête de l'application -->
+    <header class="app-header">
+      <div class="header-content">
+        <h1>🎵 Caisse Musique</h1>
+        <span class="dev-badge" onclick="openAdminModal()" title="Espace Administrateur Dev.Assamoi">Dev.Assamoi ⚙️</span>
+      </div>
+    </header>
+
+    <!-- Navigation principale par onglets -->
+    <nav class="app-nav">
+      <button class="nav-btn active" onclick="switchTab('tab-home', event)">📊 Tableau</button>
+      <button class="nav-btn" onclick="switchTab('tab-scan', event)">📷 Scanner</button>
+      <button class="nav-btn" onclick="switchTab('tab-members', event)">👥 Membres</button>
+      <button class="nav-btn" onclick="switchTab('tab-history', event)">📜 Historique</button>
+    </nav>
+
+    <!-- Contenu principal -->
+    <main class="app-container">
+
+      <!-- TAB 1 : TABLEAU DE BORD (STATS ET RÉSUMÉ) -->
+      <section id="tab-home" class="tab-content active">
+        <div class="stats-grid">
+          <div class="stat-card primary">
+            <span class="stat-label">Total en Caisse</span>
+            <span class="stat-value" id="stat-total">0 FCFA</span>
+          </div>
+          <div class="stat-card success">
+            <span class="stat-label">À jour aujourd'hui</span>
+            <span class="stat-value" id="stat-paid-count">0</span>
+          </div>
+          <div class="stat-card warning">
+            <span class="stat-label">En attente</span>
+            <span class="stat-value" id="stat-pending-count">0</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Derniers paiements</h3>
+          <div id="recent-payments-list" class="list-container">
+            <p class="empty-msg">Chargement des données synchronisées...</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2 : SCANNER DE QR CODE POUR ENCAISSEMENT -->
+      <section id="tab-scan" class="tab-content">
+        <div class="card text-center">
+          <h2>Paiement Rapide par QR Code</h2>
+          <p class="subtitle">Scannez le badge du membre pour encaisser</p>
+          
+          <div id="qr-reader" style="width: 100%; max-width: 400px; margin: 15px auto;"></div>
+          
+          <div id="scan-result-card" class="scan-result hidden">
+            <h3 id="scanned-member-name">Nom du membre</h3>
+            <p id="scanned-member-status" class="status-badge"></p>
+            
+            <div class="amount-selector">
+              <p><strong>Choisir le montant :</strong></p>
+              <div class="amount-buttons">
+                <button onclick="setAmount(100, event)" class="btn-amount active">100 F (1 dim)</button>
+                <button onclick="setAmount(500, event)" class="btn-amount">500 F (1 mois)</button>
+                <button onclick="setAmount(1200, event)" class="btn-amount">1 200 F (3 mois)</button>
+                <button onclick="setAmount(5200, event)" class="btn-amount">5 200 F (1 an)</button>
+              </div>
+              <input type="number" id="custom-amount" value="100" placeholder="Autre montant" min="100" step="100">
+            </div>
+
+            <button id="btn-confirm-payment" class="btn-primary full-width" onclick="confirmScannedPayment()">Valider le Paiement</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3 : GESTION ET LISTE DES MEMBRES -->
+      <section id="tab-members" class="tab-content">
+        <div class="card">
+          <h3>Ajouter un nouveau membre</h3>
+          <form id="form-add-member" onsubmit="handleAddMember(event)">
+            <div class="form-group">
+              <input type="text" id="member-name-input" placeholder="Nom et Prénom du membre" required>
+              <button type="submit" class="btn-primary">Ajouter</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card">
+          <div class="card-header-flex">
+            <h3>Liste des membres</h3>
+            <input type="text" id="search-member" placeholder="Rechercher..." oninput="renderMembers()">
+          </div>
+          <div id="members-list" class="list-container"></div>
+        </div>
+      </section>
+
+      <!-- TAB 4 : HISTORIQUE DES COTISATIONS -->
+      <section id="tab-history" class="tab-content">
+        <div class="card">
+          <h3>Historique Complet</h3>
+          <div id="full-history-list" class="list-container"></div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- MODAL 1 : AFFICHAGE DU QR CODE D'UN MEMBRE -->
+    <div id="qr-modal" class="modal hidden">
+      <div class="modal-content">
+        <span class="close-btn" onclick="closeQrModal()">&times;</span>
+        <h3 id="modal-member-name">QR Code du Membre</h3>
+        <div id="qrcode-container"></div>
+        <p class="subtitle">Partagez ce badge au membre sur WhatsApp.</p>
+      </div>
+    </div>
+
+    <!-- MODAL 2 : ADMINISTRATION DEV.ASSAMOI (MODIFICATION DU CODE PIN) -->
+    <div id="admin-modal" class="modal hidden">
+      <div class="modal-content">
+        <span class="close-btn" onclick="closeAdminModal()">&times;</span>
+        <h3>⚙️ Espace Dev.Assamoi</h3>
+        <p class="subtitle">Modification réservée au développeur</p>
+
+        <div id="admin-auth-step">
+          <p>Entrez la Clé Maître Développeur :</p>
+          <input type="password" id="dev-master-key" placeholder="Clé Maître Dev">
+          <button onclick="verifyDevKey()" class="btn-primary full-width margin-top">Vérifier</button>
+        </div>
+
+        <div id="admin-change-pin-step" class="hidden">
+          <p class="success-text">✅ Accès autorisé Dev.Assamoi</p>
+          <label for="new-pin-input">Nouveau Code PIN d'accès :</label>
+          <input type="number" id="new-pin-input" placeholder="Ex: 5678" maxlength="6">
+          <button onclick="saveNewPinCode()" class="btn-primary full-width margin-top">Enregistrer le nouveau PIN</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Fichier logique JavaScript principal -->
+  <script src="app.js"></script>
 </body>
 </html>
