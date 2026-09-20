@@ -1,4 +1,31 @@
-// --- INITIALISATION DES DONNÉES EN STORAGE ---
+// Import des SDK Firebase depuis le CDN (version modulaire)
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { 
+  getFirestore, 
+  collection, 
+  doc, 
+  setDoc, 
+  updateDoc, 
+  addDoc, 
+  onSnapshot, 
+  serverTimestamp 
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+// --- CONFIGURATION FIREBASE ---
+const firebaseConfig = {
+  apiKey: "AIzaSyBbU1LtQo01r17yLBoB6oxTW7303bLhQLU",
+  authDomain: "registre-eglise.firebaseapp.com",
+  projectId: "registre-eglise",
+  storageBucket: "registre-eglise.firebasestorage.app",
+  messagingSenderId: "832296267584",
+  appId: "1:832296267584:web:e92d475bf60914f67e14a5"
+};
+
+// Initialisation de Firebase & Firestore
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// --- DONNÉES EN MÉMOIRE (Cache local) ---
 let members = JSON.parse(localStorage.getItem('cm_members')) || [];
 let transactions = JSON.parse(localStorage.getItem('cm_transactions')) || [];
 let activeScannedMemberId = null;
@@ -11,7 +38,40 @@ document.addEventListener("DOMContentLoaded", () => {
   renderHistory();
   initScanner();
   registerServiceWorker();
+  
+  // Lancer la synchronisation en temps réel avec Firestore
+  initFirestoreSync();
 });
+
+// --- SYNCHRONISATION TEMPS RÉEL FIRESTORE ---
+function initFirestoreSync() {
+  // Écouter les membres en temps réel
+  onSnapshot(collection(db, "members"), (snapshot) => {
+    members = [];
+    snapshot.forEach((document) => {
+      members.push({ id: document.id, ...document.data() });
+    });
+    saveLocal();
+    renderStats();
+    renderMembers();
+  }, (error) => {
+    console.error("Erreur synchro membres:", error);
+  });
+
+  // Écouter les transactions en temps réel
+  onSnapshot(collection(db, "transactions"), (snapshot) => {
+    transactions = [];
+    snapshot.forEach((document) => {
+      transactions.push({ id: document.id, ...document.data() });
+    });
+    // Tri par date/timestamp décroissant si nécessaire
+    saveLocal();
+    renderStats();
+    renderHistory();
+  }, (error) => {
+    console.error("Erreur synchro transactions:", error);
+  });
+}
 
 // --- UTILITAIRES DE DATE (Temps local) ---
 function getTodayString() {
@@ -77,7 +137,7 @@ function renderStats() {
 }
 
 // --- GESTION DES MEMBRES ---
-function handleAddMember(e) {
+async function handleAddMember(e) {
   if (e && e.preventDefault) e.preventDefault();
 
   const input = document.getElementById('member-name-input');
@@ -86,18 +146,21 @@ function handleAddMember(e) {
   const name = input.value.trim();
   if (!name) return;
 
+  const memberId = 'MBR-' + Date.now();
   const newMember = {
-    id: 'MBR-' + Date.now(),
     name: name,
-    paidUntil: '2000-01-01' // Date passée par défaut (non payé)
+    paidUntil: '2000-01-01'
   };
 
-  members.push(newMember);
-  saveData();
-  input.value = '';
-  renderMembers();
-  renderStats();
-  showQrModal(newMember.id, newMember.name);
+  try {
+    // Enregistrement dans Firestore
+    await setDoc(doc(db, "members", memberId), newMember);
+    input.value = '';
+    showQrModal(memberId, name);
+  } catch (err) {
+    console.error("Erreur ajout membre:", err);
+    alert("Erreur lors de l'enregistrement du membre sur le cloud.");
+  }
 }
 
 function renderMembers() {
@@ -149,36 +212,36 @@ function quickPay(memberId) {
   }
 }
 
-function processPayment(memberId, amount) {
+async function processPayment(memberId, amount) {
   const member = members.find(m => m.id === memberId);
   if (!member) return;
 
-  // Calcul du nombre de jours (100 F = 7 jours)
   const weeksPaid = Math.floor(amount / 100);
   const daysToAdd = weeksPaid * 7;
-
   const todayStr = getTodayString();
 
-  // Si le membre est déjà à jour dans le futur, on prolonge à partir de son échéance
   let baseDateStr = (member.paidUntil && member.paidUntil > todayStr) ? member.paidUntil : todayStr;
   const newPaidUntil = addDaysToDate(baseDateStr, daysToAdd);
 
-  member.paidUntil = newPaidUntil;
+  try {
+    // 1. Mettre à jour le membre dans Firestore
+    await updateDoc(doc(db, "members", memberId), {
+      paidUntil: newPaidUntil
+    });
 
-  // Enregistrer la transaction
-  transactions.unshift({
-    id: 'TR-' + Date.now(),
-    memberName: member.name,
-    amount: amount,
-    date: new Date().toLocaleString('fr-FR')
-  });
+    // 2. Ajouter la transaction dans Firestore
+    await addDoc(collection(db, "transactions"), {
+      memberName: member.name,
+      amount: amount,
+      date: new Date().toLocaleString('fr-FR'),
+      timestamp: serverTimestamp()
+    });
 
-  saveData();
-  renderStats();
-  renderMembers();
-  renderHistory();
-
-  alert(`Paiement de ${amount} F validé pour ${member.name} !\nÀ jour jusqu'au : ${formatDate(newPaidUntil)}`);
+    alert(`Paiement de ${amount} F validé pour ${member.name} !\nÀ jour jusqu'au : ${formatDate(newPaidUntil)}`);
+  } catch (err) {
+    console.error("Erreur lors du paiement:", err);
+    alert("Erreur de synchronisation du paiement.");
+  }
 }
 
 // --- HISTORIQUE ---
@@ -300,8 +363,8 @@ function closeQrModal() {
   if (modal) modal.classList.add('hidden');
 }
 
-// --- UTILITAIRES DE STOCKAGE ---
-function saveData() {
+// --- UTILITAIRES DE STOCKAGE LOCAL (Secours) ---
+function saveLocal() {
   localStorage.setItem('cm_members', JSON.stringify(members));
   localStorage.setItem('cm_transactions', JSON.stringify(transactions));
 }
