@@ -28,6 +28,17 @@ body {
 }
 
 /* ==========================================
+   CLASSES D'AFFICHAGE ET DE MASQUAGE
+   ========================================== */
+.hidden {
+  display: none !important;
+}
+
+.app-hidden {
+  display: none !important;
+}
+
+/* ==========================================
    ÉCRAN DE VERROUILLAGE CODE PIN
    ========================================== */
 .pin-screen-overlay {
@@ -84,10 +95,6 @@ body {
   font-size: 0.85rem;
   margin-top: 10px;
   font-weight: bold;
-}
-
-.app-hidden {
-  display: none !important;
 }
 
 /* ==========================================
@@ -400,6 +407,11 @@ input:focus {
 /* ==========================================
    SCANNER ET SÉLECTEUR DE MONTANTS
    ========================================== */
+#qr-reader video {
+  max-width: 100% !important;
+  border-radius: 12px;
+}
+
 .amount-buttons {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
