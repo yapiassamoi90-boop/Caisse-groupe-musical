@@ -1,5 +1,16 @@
 // ==========================================
-// CONFIGURATION FIREBASE (REGISTRE EGLISE)
+// 0. ENREGISTREMENT DU SERVICE WORKER (PWA)
+// ==========================================
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(reg => console.log('✅ PWA : Service Worker enregistré avec succès !', reg))
+      .catch(err => console.error('❌ PWA : Erreur d\'enregistrement Service Worker :', err));
+  });
+}
+
+// ==========================================
+// 1. CONFIGURATION FIREBASE (REGISTRE EGLISE)
 // ==========================================
 const firebaseConfig = {
   apiKey: "AIzaSyBbU1LtQo01r17yLBoB6oxTW7303bLhQLU",
@@ -28,7 +39,7 @@ let currentScannedMember = null;
 let selectedAmount = 100;
 
 // ==========================================
-// INITIALISATION AU CHARGEMENT DE LA PAGE
+// 2. INITIALISATION AU CHARGEMENT DE LA PAGE
 // ==========================================
 window.addEventListener('DOMContentLoaded', () => {
   syncPinCode();
@@ -36,7 +47,7 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 // ==========================================
-// DÉVERROUILLAGE & GESTION DU CODE PIN
+// 3. DÉVERROUILLAGE & GESTION DU CODE PIN
 // ==========================================
 
 // Écoute en direct du code PIN stocké sur le cloud
@@ -69,7 +80,7 @@ function checkPinCode() {
 }
 
 // ==========================================
-// ESPACE ADMINISTRATION DEV.ASSAMOI
+// 4. ESPACE ADMINISTRATION DEV.ASSAMOI
 // ==========================================
 
 function openAdminModal() {
@@ -115,7 +126,7 @@ function saveNewPinCode() {
 }
 
 // ==========================================
-// SYNCHRONISATION TEMPS RÉEL FIREBASE
+// 5. SYNCHRONISATION TEMPS RÉEL FIREBASE
 // ==========================================
 
 function setupRealtimeSync() {
@@ -141,7 +152,7 @@ function setupRealtimeSync() {
 }
 
 // ==========================================
-// ENREGISTREMENT ET CALCUL DES COTISATIONS
+// 6. ENREGISTREMENT ET CALCUL DES COTISATIONS
 // ==========================================
 
 function handleAddMember(e) {
@@ -194,7 +205,7 @@ function recordPayment(memberId, amount) {
 }
 
 // ==========================================
-// AFFICHAGE DE L'INTERFACE UTILISATEUR
+// 7. AFFICHAGE DE L'INTERFACE UTILISATEUR
 // ==========================================
 
 function renderMembers() {
@@ -287,7 +298,7 @@ function renderHistory() {
 }
 
 // ==========================================
-// NAVIGATION ET SCANNER DE QR CODE
+// 8. NAVIGATION ET SCANNER DE QR CODE
 // ==========================================
 
 function switchTab(tabId, e) {
