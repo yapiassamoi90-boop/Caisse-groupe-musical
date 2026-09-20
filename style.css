@@ -27,7 +27,72 @@ body {
   padding-bottom: 30px;
 }
 
-/* Header */
+/* ==========================================
+   ÉCRAN DE VERROUILLAGE CODE PIN
+   ========================================== */
+.pin-screen-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: linear-gradient(135deg, #f43f5e, #db2777);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+.pin-card {
+  background: white;
+  padding: 30px 20px;
+  border-radius: 20px;
+  text-align: center;
+  width: 90%;
+  max-width: 360px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+.lock-icon {
+  font-size: 48px;
+  margin-bottom: 10px;
+}
+
+.pin-input-group {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pin-input-group input {
+  font-size: 24px;
+  text-align: center;
+  letter-spacing: 8px;
+  padding: 10px;
+  border: 2px solid var(--primary-light);
+  border-radius: 10px;
+  outline: none;
+}
+
+.pin-input-group input:focus {
+  border-color: var(--primary);
+}
+
+.error-msg {
+  color: #dc2626;
+  font-size: 0.85rem;
+  margin-top: 10px;
+  font-weight: bold;
+}
+
+.app-hidden {
+  display: none !important;
+}
+
+/* ==========================================
+   HEADER & NAVIGATION
+   ========================================== */
 .app-header {
   background: linear-gradient(135deg, #f43f5e, #db2777);
   color: white;
@@ -43,15 +108,24 @@ body {
   margin: 0 auto;
 }
 
+.header-content h1 {
+  font-size: 1.25rem;
+}
+
 .dev-badge {
   font-size: 0.75rem;
   background-color: rgba(255, 255, 255, 0.25);
-  padding: 3px 8px;
+  padding: 4px 10px;
   border-radius: 12px;
   font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s;
 }
 
-/* Navigation Bar */
+.dev-badge:hover {
+  background-color: rgba(255, 255, 255, 0.4);
+}
+
 .app-nav {
   display: flex;
   justify-content: space-around;
@@ -83,7 +157,9 @@ body {
   background-color: var(--primary-light);
 }
 
-/* App Container */
+/* ==========================================
+   STRUCTURE & CARTE (CONTAINER)
+   ========================================== */
 .app-container {
   max-width: 600px;
   margin: 15px auto;
@@ -98,7 +174,6 @@ body {
   display: block;
 }
 
-/* Cards & Components */
 .card {
   background: var(--card-bg);
   border-radius: 16px;
@@ -113,13 +188,31 @@ body {
   margin-bottom: 10px;
 }
 
+.card-header-flex {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  gap: 10px;
+}
+
 .subtitle {
   font-size: 0.85rem;
   color: var(--text-muted);
   margin-bottom: 15px;
 }
 
-/* Stats Cards */
+.text-center {
+  text-align: center;
+}
+
+.margin-top {
+  margin-top: 15px;
+}
+
+/* ==========================================
+   STATISTIQUES
+   ========================================== */
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -129,7 +222,7 @@ body {
 
 .stat-card {
   background: white;
-  padding: 12px;
+  padding: 12px 8px;
   border-radius: 12px;
   text-align: center;
   box-shadow: var(--shadow);
@@ -148,13 +241,15 @@ body {
 }
 
 .stat-value {
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   font-weight: bold;
   margin-top: 5px;
   display: block;
 }
 
-/* Buttons & Inputs */
+/* ==========================================
+   BOUTONS ET FORMULAIRES
+   ========================================== */
 .btn-primary {
   background: linear-gradient(135deg, #f43f5e, #db2777);
   color: white;
@@ -170,12 +265,6 @@ body {
   transform: scale(0.98);
 }
 
-.btn-sm {
-  padding: 6px 10px;
-  font-size: 0.8rem;
-  margin-left: 5px;
-}
-
 .full-width {
   width: 100%;
   margin-top: 10px;
@@ -186,7 +275,7 @@ body {
   gap: 8px;
 }
 
-input[type="text"], input[type="number"] {
+input[type="text"], input[type="number"], input[type="password"] {
   flex: 1;
   padding: 10px;
   border: 1.5px solid var(--border-color);
@@ -199,30 +288,118 @@ input:focus {
   border-color: var(--primary);
 }
 
-/* Member Items */
-.member-item, .transaction-item {
+/* ==========================================
+   LISTES ET ÉLÉMENTS DE MEMBRES
+   ========================================== */
+.list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.member-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px;
+  padding: 10px 0;
   border-bottom: 1px solid var(--border-color);
 }
 
-.member-item:last-child, .transaction-item:last-child {
+.member-item:last-child {
   border-bottom: none;
 }
 
-.badge {
-  font-size: 0.75rem;
-  padding: 4px 8px;
-  border-radius: 10px;
-  font-weight: bold;
+.member-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.badge.success { background-color: var(--secondary-light); color: var(--secondary); }
-.badge.warning { background-color: var(--warning-light); color: var(--warning); }
+.member-actions {
+  display: flex;
+  gap: 6px;
+}
 
-/* Amount Selector */
+.btn-action {
+  border: none;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.btn-action.pay {
+  background-color: var(--primary);
+  color: white;
+}
+
+.btn-action.qr {
+  background-color: var(--secondary);
+  color: white;
+}
+
+/* Badges de Statut */
+.status-badge {
+  font-size: 0.75rem;
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-weight: bold;
+  display: inline-block;
+  width: fit-content;
+}
+
+.status-badge.success {
+  background-color: var(--secondary-light);
+  color: var(--secondary);
+}
+
+.status-badge.warning {
+  background-color: var(--warning-light);
+  color: var(--warning);
+}
+
+/* ==========================================
+   HISTORIQUE ET TRANSACTIONS
+   ========================================== */
+.history-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.history-item:last-child {
+  border-bottom: none;
+}
+
+.history-item small {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  margin-top: 2px;
+}
+
+.amount-tag {
+  background-color: var(--secondary-light);
+  color: var(--secondary);
+  font-weight: bold;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+
+.empty-msg {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  padding: 15px 0;
+}
+
+/* ==========================================
+   SCANNER ET SÉLECTEUR DE MONTANTS
+   ========================================== */
 .amount-buttons {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -234,10 +411,11 @@ input:focus {
   background: #fdf2f8;
   border: 1px solid var(--primary-light);
   color: var(--primary);
-  padding: 8px;
+  padding: 10px 8px;
   border-radius: 8px;
   font-weight: bold;
   cursor: pointer;
+  font-size: 0.8rem;
 }
 
 .btn-amount.active {
@@ -245,7 +423,6 @@ input:focus {
   color: white;
 }
 
-/* Scanner Results */
 .scan-result {
   background: var(--primary-light);
   padding: 15px;
@@ -253,32 +430,37 @@ input:focus {
   margin-top: 15px;
 }
 
-.hidden { display: none !important; }
-
-/* Modal */
+/* ==========================================
+   MODALES (QR CODE ET DEV.ASSAMOI)
+   ========================================== */
 .modal {
   position: fixed;
-  top: 0; left: 0; width: 100%; height: 100%;
-  background: rgba(0, 0, 0, 0.4);
+  top: 0; 
+  left: 0; 
+  width: 100%; 
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 100;
+  z-index: 1000;
 }
 
 .modal-content {
   background: white;
-  padding: 20px;
+  padding: 24px 20px;
   border-radius: 16px;
   text-align: center;
   position: relative;
   max-width: 320px;
   width: 90%;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
 }
 
 .close-btn {
   position: absolute;
-  top: 10px; right: 15px;
+  top: 10px; 
+  right: 15px;
   font-size: 1.5rem;
   cursor: pointer;
   color: var(--text-muted);
@@ -288,4 +470,10 @@ input:focus {
   display: flex;
   justify-content: center;
   margin: 15px 0;
+}
+
+.success-text {
+  color: var(--secondary);
+  font-weight: bold;
+  margin-bottom: 10px;
 }
