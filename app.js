@@ -1,17 +1,6 @@
-// Import des SDK Firebase depuis le CDN (version modulaire)
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { 
-  getFirestore, 
-  collection, 
-  doc, 
-  setDoc, 
-  updateDoc, 
-  addDoc, 
-  onSnapshot, 
-  serverTimestamp 
-} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-
-// --- CONFIGURATION FIREBASE ---
+// ==========================================
+// CONFIGURATION FIREBASE (REGISTRE EGLISE)
+// ==========================================
 const firebaseConfig = {
   apiKey: "AIzaSyBbU1LtQo01r17yLBoB6oxTW7303bLhQLU",
   authDomain: "registre-eglise.firebaseapp.com",
@@ -21,159 +10,200 @@ const firebaseConfig = {
   appId: "1:832296267584:web:e92d475bf60914f67e14a5"
 };
 
-// Initialisation de Firebase & Firestore
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+// Initialisation de Firebase
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+}
+const db = firebase.firestore();
 
-// --- DONNÉES EN MÉMOIRE (Cache local) ---
-let members = JSON.parse(localStorage.getItem('cm_members')) || [];
-let transactions = JSON.parse(localStorage.getItem('cm_transactions')) || [];
-let activeScannedMemberId = null;
-let html5QrcodeScanner = null;
+// CLÉ MAÎTRE SEUL DEV.ASSAMOI CONNAÎT POUR CHANGER LE CODE PIN
+const DEV_MASTER_KEY = "DEV2026"; // Clé secrète développeur
 
-// --- DÉMARRAGE DE L'APPLICATION ---
-document.addEventListener("DOMContentLoaded", () => {
-  renderStats();
-  renderMembers();
-  renderHistory();
-  initScanner();
-  registerServiceWorker();
-  
-  // Lancer la synchronisation en temps réel avec Firestore
-  initFirestoreSync();
+// ÉTATS DE L'APPLICATION
+let currentPin = "1234"; // PIN par défaut
+let membersData = [];
+let transactionsData = [];
+let html5QrCode = null;
+let currentScannedMember = null;
+let selectedAmount = 100;
+
+// ==========================================
+// INITIALISATION AU CHARGEMENT DE LA PAGE
+// ==========================================
+window.addEventListener('DOMContentLoaded', () => {
+  syncPinCode();
+  setupRealtimeSync();
 });
 
-// --- SYNCHRONISATION TEMPS RÉEL FIRESTORE ---
-function initFirestoreSync() {
-  // Écouter les membres en temps réel
-  onSnapshot(collection(db, "members"), (snapshot) => {
-    members = [];
-    snapshot.forEach((document) => {
-      members.push({ id: document.id, ...document.data() });
-    });
-    saveLocal();
-    renderStats();
-    renderMembers();
-  }, (error) => {
-    console.error("Erreur synchro membres:", error);
-  });
+// ==========================================
+// DÉVERROUILLAGE & GESTION DU CODE PIN
+// ==========================================
 
-  // Écouter les transactions en temps réel
-  onSnapshot(collection(db, "transactions"), (snapshot) => {
-    transactions = [];
-    snapshot.forEach((document) => {
-      transactions.push({ id: document.id, ...document.data() });
-    });
-    // Tri par date/timestamp décroissant si nécessaire
-    saveLocal();
-    renderStats();
-    renderHistory();
+// Écoute en direct du code PIN stocké sur le cloud
+function syncPinCode() {
+  db.collection("config").doc("app_security").onSnapshot((doc) => {
+    if (doc.exists && doc.data().pinCode) {
+      currentPin = doc.data().pinCode.toString();
+    } else {
+      // Création du PIN par défaut (1234) sur Firestore si première utilisation
+      db.collection("config").doc("app_security").set({ pinCode: "1234" });
+    }
   }, (error) => {
-    console.error("Erreur synchro transactions:", error);
+    console.warn("Utilisation du PIN local par défaut (1234) en mode hors-ligne");
   });
 }
 
-// --- UTILITAIRES DE DATE (Temps local) ---
-function getTodayString() {
-  const d = new Date();
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
+// Vérification du code PIN saisi sur l'écran de verrouillage
+function checkPinCode() {
+  const enteredPin = document.getElementById('pin-input').value.trim();
+  const errorMsg = document.getElementById('pin-error-msg');
 
-function formatDate(dateStr) {
-  if (!dateStr) return '';
-  const [y, m, d] = dateStr.split('-');
-  return `${d}/${m}/${y}`;
-}
-
-function addDaysToDate(dateStr, days) {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  const date = new Date(y, m - 1, d);
-  date.setDate(date.getDate() + days);
-  
-  const resYear = date.getFullYear();
-  const resMonth = String(date.getMonth() + 1).padStart(2, '0');
-  const resDay = String(date.getDate()).padStart(2, '0');
-  return `${resYear}-${resMonth}-${resDay}`;
-}
-
-// --- NAVIGATION D'ONGLETS ---
-function switchTab(tabId, evt) {
-  document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
-  document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
-
-  const targetTab = document.getElementById(tabId);
-  if (targetTab) targetTab.classList.add('active');
-
-  if (evt && evt.currentTarget) {
-    evt.currentTarget.classList.add('active');
+  if (enteredPin === currentPin) {
+    document.getElementById('pin-screen').style.display = 'none';
+    document.getElementById('main-app').classList.remove('app-hidden');
+    errorMsg.classList.add('hidden');
+  } else {
+    errorMsg.classList.remove('hidden');
+    document.getElementById('pin-input').value = '';
   }
 }
 
-// --- TABLEAU DE BORD ET STATISTIQUES ---
-function renderStats() {
-  const totalAmount = transactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
-  const totalElem = document.getElementById('stat-total');
-  if (totalElem) totalElem.innerText = `${totalAmount.toLocaleString('fr-FR')} F`;
+// ==========================================
+// ESPACE ADMINISTRATION DEV.ASSAMOI
+// ==========================================
 
-  const todayStr = getTodayString();
-  let paidCount = 0;
-  let pendingCount = 0;
-
-  members.forEach(m => {
-    if (m.paidUntil && m.paidUntil >= todayStr) {
-      paidCount++;
-    } else {
-      pendingCount++;
-    }
-  });
-
-  const paidElem = document.getElementById('stat-paid-count');
-  const pendingElem = document.getElementById('stat-pending-count');
-  if (paidElem) paidElem.innerText = paidCount;
-  if (pendingElem) pendingElem.innerText = pendingCount;
+function openAdminModal() {
+  document.getElementById('admin-modal').classList.remove('hidden');
+  document.getElementById('admin-auth-step').classList.remove('hidden');
+  document.getElementById('admin-change-pin-step').classList.add('hidden');
+  document.getElementById('dev-master-key').value = '';
 }
 
-// --- GESTION DES MEMBRES ---
-async function handleAddMember(e) {
-  if (e && e.preventDefault) e.preventDefault();
+function closeAdminModal() {
+  document.getElementById('admin-modal').classList.add('hidden');
+}
 
+// Vérification de la clé maître du développeur
+function verifyDevKey() {
+  const key = document.getElementById('dev-master-key').value.trim();
+  if (key === DEV_MASTER_KEY) {
+    document.getElementById('admin-auth-step').classList.add('hidden');
+    document.getElementById('admin-change-pin-step').classList.remove('hidden');
+  } else {
+    alert("❌ Clé Maître Dev.Assamoi incorrecte ! Seul le développeur peut modifier le code PIN.");
+  }
+}
+
+// Enregistrement du nouveau PIN sur le Cloud
+function saveNewPinCode() {
+  const newPin = document.getElementById('new-pin-input').value.trim();
+  if (newPin.length < 4) {
+    alert("Le code PIN doit comporter au moins 4 chiffres.");
+    return;
+  }
+
+  db.collection("config").doc("app_security").set({
+    pinCode: newPin,
+    updatedAt: new Date().toISOString()
+  }).then(() => {
+    alert(`✅ Nouveau code PIN enregistré avec succès : ${newPin}`);
+    currentPin = newPin;
+    closeAdminModal();
+  }).catch((err) => {
+    alert("Erreur de sauvegarde : " + err.message);
+  });
+}
+
+// ==========================================
+// SYNCHRONISATION TEMPS RÉEL FIREBASE
+// ==========================================
+
+function setupRealtimeSync() {
+  // 1. Écoute instantanée de la liste des membres
+  db.collection("members").onSnapshot((snapshot) => {
+    membersData = [];
+    snapshot.forEach((doc) => {
+      membersData.push({ id: doc.id, ...doc.data() });
+    });
+    renderMembers();
+    updateStats();
+  });
+
+  // 2. Écoute instantanée de l'historique des cotisations
+  db.collection("transactions").orderBy("timestamp", "desc").onSnapshot((snapshot) => {
+    transactionsData = [];
+    snapshot.forEach((doc) => {
+      transactionsData.push({ id: doc.id, ...doc.data() });
+    });
+    renderHistory();
+    updateStats();
+  });
+}
+
+// ==========================================
+// ENREGISTREMENT ET CALCUL DES COTISATIONS
+// ==========================================
+
+function handleAddMember(e) {
+  e.preventDefault();
   const input = document.getElementById('member-name-input');
-  if (!input) return;
-
   const name = input.value.trim();
+
   if (!name) return;
 
-  const memberId = 'MBR-' + Date.now();
   const newMember = {
     name: name,
-    paidUntil: '2000-01-01'
+    paidUntil: null,
+    createdAt: new Date().toISOString()
   };
 
-  try {
-    // Enregistrement dans Firestore
-    await setDoc(doc(db, "members", memberId), newMember);
+  db.collection("members").add(newMember).then(() => {
     input.value = '';
-    showQrModal(memberId, name);
-  } catch (err) {
-    console.error("Erreur ajout membre:", err);
-    alert("Erreur lors de l'enregistrement du membre sur le cloud.");
-  }
+  });
 }
+
+// Règle des cotisations : 100 FCFA = 7 jours d'accès
+function recordPayment(memberId, amount) {
+  const member = membersData.find(m => m.id === memberId);
+  if (!member) return;
+
+  const daysToAdd = Math.floor((amount / 100) * 7);
+  let baseDate = new Date();
+
+  // Si le membre est déjà à jour dans le futur, prolonger à partir de sa date d'échéance
+  if (member.paidUntil && new Date(member.paidUntil) > new Date()) {
+    baseDate = new Date(member.paidUntil);
+  }
+
+  baseDate.setDate(baseDate.getDate() + daysToAdd);
+  const newPaidUntil = baseDate.toISOString();
+
+  // Mise à jour Cloud pour le membre
+  db.collection("members").doc(memberId).update({
+    paidUntil: newPaidUntil
+  });
+
+  // Ajout de la transaction sur Cloud Firestore
+  db.collection("transactions").add({
+    memberId: memberId,
+    memberName: member.name,
+    amount: parseInt(amount),
+    timestamp: new Date().toISOString(),
+    daysAdded: daysToAdd
+  });
+}
+
+// ==========================================
+// AFFICHAGE DE L'INTERFACE UTILISATEUR
+// ==========================================
 
 function renderMembers() {
   const container = document.getElementById('members-list');
-  if (!container) return;
-
   const searchInput = document.getElementById('search-member');
   const search = searchInput ? searchInput.value.toLowerCase() : '';
-  const todayStr = getTodayString();
-
   container.innerHTML = '';
 
-  const filtered = members.filter(m => m.name.toLowerCase().includes(search));
+  const filtered = membersData.filter(m => m.name.toLowerCase().includes(search));
 
   if (filtered.length === 0) {
     container.innerHTML = '<p class="empty-msg">Aucun membre trouvé.</p>';
@@ -181,199 +211,168 @@ function renderMembers() {
   }
 
   filtered.forEach(m => {
-    const isPaid = m.paidUntil && m.paidUntil >= todayStr;
-    const safeName = m.name.replace(/'/g, "\\'");
+    const isPaid = m.paidUntil && new Date(m.paidUntil) > new Date();
+    const formattedDate = m.paidUntil ? new Date(m.paidUntil).toLocaleDateString('fr-FR') : '';
+
     const div = document.createElement('div');
     div.className = 'member-item';
     div.innerHTML = `
-      <div>
-        <strong>${m.name}</strong><br>
-        <span class="badge ${isPaid ? 'success' : 'warning'}">
-          ${isPaid ? 'À jour (jusqu\'au ' + formatDate(m.paidUntil) + ')' : 'Non payé'}
+      <div class="member-info">
+        <strong>${m.name}</strong>
+        <span class="status-badge ${isPaid ? 'success' : 'warning'}">
+          ${isPaid ? `À jour (jusqu'au ${formattedDate})` : 'Non payé'}
         </span>
       </div>
-      <div>
-        <button class="btn-primary btn-sm" onclick="quickPay('${m.id}')">➕ Payer</button>
-        <button class="btn-primary btn-sm" style="background:#059669" onclick="showQrModal('${m.id}', '${safeName}')">📱 QR</button>
+      <div class="member-actions">
+        <button class="btn-action pay" onclick="promptManualPayment('${m.id}')">+ Payer</button>
+        <button class="btn-action qr" onclick="showMemberQr('${m.id}', '${m.name}')">📱 QR</button>
       </div>
     `;
     container.appendChild(div);
   });
 }
 
-// --- PAIEMENT ET CALCULS DES AVANCES ---
-function quickPay(memberId) {
-  const member = members.find(m => m.id === memberId);
+function promptManualPayment(memberId) {
+  const member = membersData.find(m => m.id === memberId);
   if (!member) return;
-
-  const amount = prompt(`Encaisser pour ${member.name} (en FCFA):`, 100);
-  if (amount && parseInt(amount, 10) >= 100) {
-    processPayment(member.id, parseInt(amount, 10));
+  const amountStr = prompt(`Paiement pour ${member.name} (en FCFA) :`, "100");
+  const amount = parseInt(amountStr);
+  if (amount && amount > 0) {
+    recordPayment(memberId, amount);
   }
 }
 
-async function processPayment(memberId, amount) {
-  const member = members.find(m => m.id === memberId);
-  if (!member) return;
+function updateStats() {
+  const total = transactionsData.reduce((sum, t) => sum + (t.amount || 0), 0);
+  const paidCount = membersData.filter(m => m.paidUntil && new Date(m.paidUntil) > new Date()).length;
+  const pendingCount = membersData.length - paidCount;
 
-  const weeksPaid = Math.floor(amount / 100);
-  const daysToAdd = weeksPaid * 7;
-  const todayStr = getTodayString();
+  const elTotal = document.getElementById('stat-total');
+  const elPaid = document.getElementById('stat-paid-count');
+  const elPending = document.getElementById('stat-pending-count');
 
-  let baseDateStr = (member.paidUntil && member.paidUntil > todayStr) ? member.paidUntil : todayStr;
-  const newPaidUntil = addDaysToDate(baseDateStr, daysToAdd);
-
-  try {
-    // 1. Mettre à jour le membre dans Firestore
-    await updateDoc(doc(db, "members", memberId), {
-      paidUntil: newPaidUntil
-    });
-
-    // 2. Ajouter la transaction dans Firestore
-    await addDoc(collection(db, "transactions"), {
-      memberName: member.name,
-      amount: amount,
-      date: new Date().toLocaleString('fr-FR'),
-      timestamp: serverTimestamp()
-    });
-
-    alert(`Paiement de ${amount} F validé pour ${member.name} !\nÀ jour jusqu'au : ${formatDate(newPaidUntil)}`);
-  } catch (err) {
-    console.error("Erreur lors du paiement:", err);
-    alert("Erreur de synchronisation du paiement.");
-  }
+  if (elTotal) elTotal.innerText = `${total.toLocaleString()} FCFA`;
+  if (elPaid) elPaid.innerText = paidCount;
+  if (elPending) elPending.innerText = pendingCount;
 }
 
-// --- HISTORIQUE ---
 function renderHistory() {
-  const recentList = document.getElementById('recent-payments-list');
-  const fullList = document.getElementById('full-history-list');
+  const container = document.getElementById('full-history-list');
+  const recentContainer = document.getElementById('recent-payments-list');
+  if (!container || !recentContainer) return;
 
-  const html = transactions.length === 0 
-    ? '<p class="empty-msg">Aucune transaction.</p>' 
-    : transactions.map(t => `
-        <div class="transaction-item">
-          <div>
-            <strong>${t.memberName}</strong><br>
-            <small style="color:var(--text-muted, #666)">${t.date}</small>
-          </div>
-          <strong style="color:var(--secondary, #059669)">+${t.amount} FCFA</strong>
+  container.innerHTML = '';
+  recentContainer.innerHTML = '';
+
+  if (transactionsData.length === 0) {
+    container.innerHTML = '<p class="empty-msg">Aucun paiement enregistré.</p>';
+    recentContainer.innerHTML = '<p class="empty-msg">Aucun paiement récent.</p>';
+    return;
+  }
+
+  transactionsData.forEach((t, index) => {
+    const dateStr = new Date(t.timestamp).toLocaleString('fr-FR');
+    const html = `
+      <div class="history-item">
+        <div>
+          <strong>${t.memberName}</strong>
+          <small>${dateStr}</small>
         </div>
-      `).join('');
-
-  if (recentList) {
-    recentList.innerHTML = transactions.length === 0
-      ? '<p class="empty-msg">Aucun paiement récent.</p>'
-      : transactions.slice(0, 3).map(t => `
-          <div class="transaction-item">
-            <div><strong>${t.memberName}</strong></div>
-            <strong style="color:var(--secondary, #059669)">+${t.amount} F</strong>
-          </div>
-        `).join('');
-  }
-
-  if (fullList) fullList.innerHTML = html;
+        <div class="amount-tag">+${t.amount} FCFA</div>
+      </div>
+    `;
+    container.innerHTML += html;
+    if (index < 5) recentContainer.innerHTML += html;
+  });
 }
 
-// --- SCANNER QR CODE ---
-function initScanner() {
-  const readerElem = document.getElementById("qr-reader");
-  if (!readerElem || typeof Html5QrcodeScanner === 'undefined') return;
+// ==========================================
+// NAVIGATION ET SCANNER DE QR CODE
+// ==========================================
 
-  try {
-    html5QrcodeScanner = new Html5QrcodeScanner("qr-reader", { fps: 10, qrbox: 250 });
-    html5QrcodeScanner.render(onScanSuccess);
-  } catch (err) {
-    console.error("Erreur d'initialisation du scanner :", err);
-  }
-}
+function switchTab(tabId, e) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
 
-function onScanSuccess(decodedText) {
-  const member = members.find(m => m.id === decodedText);
-  if (member) {
-    activeScannedMemberId = member.id;
+  document.getElementById(tabId).classList.add('active');
+  if (e && e.target) e.target.classList.add('active');
 
-    const nameElem = document.getElementById('scanned-member-name');
-    if (nameElem) nameElem.innerText = member.name;
-
-    const todayStr = getTodayString();
-    const isPaid = member.paidUntil && member.paidUntil >= todayStr;
-
-    const statusBadge = document.getElementById('scanned-member-status');
-    if (statusBadge) {
-      statusBadge.innerText = isPaid ? `À jour jusqu'au ${formatDate(member.paidUntil)}` : 'Non à jour';
-      statusBadge.className = `badge ${isPaid ? 'success' : 'warning'}`;
-    }
-
-    const resultCard = document.getElementById('scan-result-card');
-    if (resultCard) resultCard.classList.remove('hidden');
+  if (tabId === 'tab-scan') {
+    startScanner();
   } else {
-    alert("QR Code non reconnu dans la base du groupe.");
+    stopScanner();
   }
 }
 
-function setAmount(val, evt) {
-  const input = document.getElementById('custom-amount');
-  if (input) input.value = val;
-
-  document.querySelectorAll('.btn-amount').forEach(btn => btn.classList.remove('active'));
-  if (evt && evt.currentTarget) {
-    evt.currentTarget.classList.add('active');
+function startScanner() {
+  if (!html5QrCode) {
+    html5QrCode = new Html5Qrcode("qr-reader");
   }
+  html5QrCode.start(
+    { facingMode: "environment" },
+    { fps: 10, qrbox: { width: 250, height: 250 } },
+    (decodedText) => {
+      onQrCodeScanned(decodedText);
+    },
+    (errorMessage) => {}
+  ).catch(err => console.log(err));
+}
+
+function stopScanner() {
+  if (html5QrCode && html5QrCode.isScanning) {
+    html5QrCode.stop().catch(err => console.log(err));
+  }
+}
+
+function onQrCodeScanned(memberId) {
+  const member = membersData.find(m => m.id === memberId);
+  if (!member) return;
+
+  currentScannedMember = member;
+  document.getElementById('scanned-member-name').innerText = member.name;
+  
+  const isPaid = member.paidUntil && new Date(member.paidUntil) > new Date();
+  const statusEl = document.getElementById('scanned-member-status');
+  statusEl.innerText = isPaid ? "À jour" : "Non payé";
+  statusEl.className = `status-badge ${isPaid ? 'success' : 'warning'}`;
+
+  document.getElementById('scan-result-card').classList.remove('hidden');
+}
+
+function setAmount(amount, e) {
+  selectedAmount = amount;
+  document.getElementById('custom-amount').value = amount;
+  document.querySelectorAll('.btn-amount').forEach(b => b.classList.remove('active'));
+  if (e && e.target) e.target.classList.add('active');
 }
 
 function confirmScannedPayment() {
-  const amountInput = document.getElementById('custom-amount');
-  const amount = amountInput ? parseInt(amountInput.value, 10) : 0;
+  if (!currentScannedMember) return;
+  const custom = parseInt(document.getElementById('custom-amount').value);
+  const amount = custom > 0 ? custom : selectedAmount;
 
-  if (activeScannedMemberId && amount >= 100) {
-    processPayment(activeScannedMemberId, amount);
-    const resultCard = document.getElementById('scan-result-card');
-    if (resultCard) resultCard.classList.add('hidden');
-    activeScannedMemberId = null;
-  }
+  recordPayment(currentScannedMember.id, amount);
+  alert(`Paiement de ${amount} FCFA validé pour ${currentScannedMember.name} !`);
+  
+  document.getElementById('scan-result-card').classList.add('hidden');
+  currentScannedMember = null;
 }
 
-// --- MODAL QR CODE ---
-function showQrModal(id, name) {
-  const nameElem = document.getElementById('modal-member-name');
-  if (nameElem) nameElem.innerText = name;
-
+// Modal d'affichage du QR Code
+function showMemberQr(memberId, memberName) {
+  document.getElementById('modal-member-name').innerText = memberName;
   const container = document.getElementById('qrcode-container');
-  if (!container) return;
-
   container.innerHTML = '';
-  
-  if (typeof QRCode !== 'undefined') {
-    new QRCode(container, {
-      text: id,
-      width: 180,
-      height: 180,
-      colorDark: "#db2777",
-      colorLight: "#ffffff"
-    });
-  }
 
-  const modal = document.getElementById('qr-modal');
-  if (modal) modal.classList.remove('hidden');
+  new QRCode(container, {
+    text: memberId,
+    width: 200,
+    height: 200
+  });
+
+  document.getElementById('qr-modal').classList.remove('hidden');
 }
 
 function closeQrModal() {
-  const modal = document.getElementById('qr-modal');
-  if (modal) modal.classList.add('hidden');
-}
-
-// --- UTILITAIRES DE STOCKAGE LOCAL (Secours) ---
-function saveLocal() {
-  localStorage.setItem('cm_members', JSON.stringify(members));
-  localStorage.setItem('cm_transactions', JSON.stringify(transactions));
-}
-
-// --- SERVICE WORKER ---
-function registerServiceWorker() {
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js')
-      .then(() => console.log('Service Worker enregistré.'))
-      .catch(err => console.error('Erreur SW:', err));
-  }
+  document.getElementById('qr-modal').classList.add('hidden');
 }
