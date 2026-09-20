@@ -31,7 +31,7 @@ const db = firebase.firestore();
 const DEV_MASTER_KEY = "DEV2026"; // Clé secrète développeur
 
 // ÉTATS DE L'APPLICATION
-let currentPin = "1234"; // PIN par défaut
+let currentPin = "1234"; // PIN par défaut (modifiable depuis l'espace Dev)
 let membersData = [];
 let transactionsData = [];
 let html5QrCode = null;
@@ -44,19 +44,27 @@ let selectedAmount = 100;
 window.addEventListener('DOMContentLoaded', () => {
   syncPinCode();
   setupRealtimeSync();
+  
+  // Écoute de la touche Entrée sur l'écran PIN
+  const pinInput = document.getElementById('pin-input');
+  if (pinInput) {
+    pinInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') checkPinCode();
+    });
+  }
 });
 
 // ==========================================
 // 3. DÉVERROUILLAGE & GESTION DU CODE PIN
 // ==========================================
 
-// Écoute en direct du code PIN stocké sur le cloud
+// Écoute en direct du code PIN stocké sur Firestore Cloud
 function syncPinCode() {
   db.collection("config").doc("app_security").onSnapshot((doc) => {
     if (doc.exists && doc.data().pinCode) {
       currentPin = doc.data().pinCode.toString();
     } else {
-      // Création du PIN par défaut (1234) sur Firestore si première utilisation
+      // PIN par défaut (1234) si première utilisation
       db.collection("config").doc("app_security").set({ pinCode: "1234" });
     }
   }, (error) => {
@@ -64,7 +72,7 @@ function syncPinCode() {
   });
 }
 
-// Vérification du code PIN saisi sur l'écran de verrouillage
+// Vérification du code PIN saisi par l'utilisateur
 function checkPinCode() {
   const enteredPin = document.getElementById('pin-input').value.trim();
   const errorMsg = document.getElementById('pin-error-msg');
@@ -73,6 +81,9 @@ function checkPinCode() {
     document.getElementById('pin-screen').style.display = 'none';
     document.getElementById('main-app').classList.remove('app-hidden');
     errorMsg.classList.add('hidden');
+    
+    // Fermer impérativement toute fenêtre modale ouverte
+    closeAdminModal();
   } else {
     errorMsg.classList.remove('hidden');
     document.getElementById('pin-input').value = '';
@@ -83,29 +94,58 @@ function checkPinCode() {
 // 4. ESPACE ADMINISTRATION DEV.ASSAMOI
 // ==========================================
 
+// Ouverture de la modale Administrateur (Uniquement au clic sur le bouton Dev.Assamoi ⚙️)
 function openAdminModal() {
-  document.getElementById('admin-modal').classList.remove('hidden');
-  document.getElementById('admin-auth-step').classList.remove('hidden');
-  document.getElementById('admin-change-pin-step').classList.add('hidden');
+  const modal = document.getElementById('admin-modal');
+  const authStep = document.getElementById('admin-auth-step');
+  const changePinStep = document.getElementById('admin-change-pin-step');
+
+  // Réinitialiser les champs de texte
   document.getElementById('dev-master-key').value = '';
+  if (document.getElementById('new-pin-input')) {
+    document.getElementById('new-pin-input').value = '';
+  }
+
+  // Étape 1 : AFFICHER la demande de Clé Maître
+  authStep.classList.remove('hidden');
+  authStep.style.display = 'block';
+
+  // Étape 2 : MASQUER la zone du nouveau PIN
+  changePinStep.classList.add('hidden');
+  changePinStep.style.display = 'none';
+
+  // Afficher la boîte modale
+  modal.classList.remove('hidden');
+  modal.style.display = 'flex';
 }
 
+// Fermeture de la modale administrateur
 function closeAdminModal() {
-  document.getElementById('admin-modal').classList.add('hidden');
+  const modal = document.getElementById('admin-modal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  }
 }
 
-// Vérification de la clé maître du développeur
+// Vérification de la Clé Maître Dev.Assamoi
 function verifyDevKey() {
   const key = document.getElementById('dev-master-key').value.trim();
+  
   if (key === DEV_MASTER_KEY) {
+    // Masquer l'étape 1
     document.getElementById('admin-auth-step').classList.add('hidden');
+    document.getElementById('admin-auth-step').style.display = 'none';
+
+    // Afficher l'étape 2 (Changement du PIN)
     document.getElementById('admin-change-pin-step').classList.remove('hidden');
+    document.getElementById('admin-change-pin-step').style.display = 'block';
   } else {
     alert("❌ Clé Maître Dev.Assamoi incorrecte ! Seul le développeur peut modifier le code PIN.");
   }
 }
 
-// Enregistrement du nouveau PIN sur le Cloud
+// Enregistrement du nouveau PIN sur Firebase Cloud
 function saveNewPinCode() {
   const newPin = document.getElementById('new-pin-input').value.trim();
   if (newPin.length < 4) {
@@ -130,7 +170,7 @@ function saveNewPinCode() {
 // ==========================================
 
 function setupRealtimeSync() {
-  // 1. Écoute instantanée de la liste des membres
+  // Écoute instantanée des membres
   db.collection("members").onSnapshot((snapshot) => {
     membersData = [];
     snapshot.forEach((doc) => {
@@ -140,7 +180,7 @@ function setupRealtimeSync() {
     updateStats();
   });
 
-  // 2. Écoute instantanée de l'historique des cotisations
+  // Écoute instantanée des transactions
   db.collection("transactions").orderBy("timestamp", "desc").onSnapshot((snapshot) => {
     transactionsData = [];
     snapshot.forEach((doc) => {
@@ -173,7 +213,7 @@ function handleAddMember(e) {
   });
 }
 
-// Règle des cotisations : 100 FCFA = 7 jours d'accès
+// Règle de calcul : 100 FCFA = 7 jours d'accès
 function recordPayment(memberId, amount) {
   const member = membersData.find(m => m.id === memberId);
   if (!member) return;
@@ -181,7 +221,7 @@ function recordPayment(memberId, amount) {
   const daysToAdd = Math.floor((amount / 100) * 7);
   let baseDate = new Date();
 
-  // Si le membre est déjà à jour dans le futur, prolonger à partir de sa date d'échéance
+  // Si le membre est déjà à jour, prolonger sa date d'échéance
   if (member.paidUntil && new Date(member.paidUntil) > new Date()) {
     baseDate = new Date(member.paidUntil);
   }
@@ -189,12 +229,12 @@ function recordPayment(memberId, amount) {
   baseDate.setDate(baseDate.getDate() + daysToAdd);
   const newPaidUntil = baseDate.toISOString();
 
-  // Mise à jour Cloud pour le membre
+  // Mise à jour sur Firestore Cloud
   db.collection("members").doc(memberId).update({
     paidUntil: newPaidUntil
   });
 
-  // Ajout de la transaction sur Cloud Firestore
+  // Ajout de la transaction
   db.collection("transactions").add({
     memberId: memberId,
     memberName: member.name,
@@ -211,6 +251,8 @@ function recordPayment(memberId, amount) {
 function renderMembers() {
   const container = document.getElementById('members-list');
   const searchInput = document.getElementById('search-member');
+  if (!container) return;
+
   const search = searchInput ? searchInput.value.toLowerCase() : '';
   container.innerHTML = '';
 
@@ -229,7 +271,7 @@ function renderMembers() {
     div.className = 'member-item';
     div.innerHTML = `
       <div class="member-info">
-        <strong>${m.name}</strong>
+        <strong>${m.name}</strong><br>
         <span class="status-badge ${isPaid ? 'success' : 'warning'}">
           ${isPaid ? `À jour (jusqu'au ${formattedDate})` : 'Non payé'}
         </span>
@@ -286,8 +328,8 @@ function renderHistory() {
     const html = `
       <div class="history-item">
         <div>
-          <strong>${t.memberName}</strong>
-          <small>${dateStr}</small>
+          <strong>${t.memberName}</strong><br>
+          <small style="color:#777; font-size:11px;">${dateStr}</small>
         </div>
         <div class="amount-tag">+${t.amount} FCFA</div>
       </div>
@@ -305,7 +347,9 @@ function switchTab(tabId, e) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
 
-  document.getElementById(tabId).classList.add('active');
+  const activeTab = document.getElementById(tabId);
+  if (activeTab) activeTab.classList.add('active');
+
   if (e && e.target) e.target.classList.add('active');
 
   if (tabId === 'tab-scan') {
@@ -321,7 +365,7 @@ function startScanner() {
   }
   html5QrCode.start(
     { facingMode: "environment" },
-    { fps: 10, qrbox: { width: 250, height: 250 } },
+    { fps: 10, qrbox: { width: 220, height: 220 } },
     (decodedText) => {
       onQrCodeScanned(decodedText);
     },
@@ -350,26 +394,19 @@ function onQrCodeScanned(memberId) {
   document.getElementById('scan-result-card').classList.remove('hidden');
 }
 
-function setAmount(amount, e) {
-  selectedAmount = amount;
-  document.getElementById('custom-amount').value = amount;
-  document.querySelectorAll('.btn-amount').forEach(b => b.classList.remove('active'));
-  if (e && e.target) e.target.classList.add('active');
-}
-
 function confirmScannedPayment() {
   if (!currentScannedMember) return;
   const custom = parseInt(document.getElementById('custom-amount').value);
   const amount = custom > 0 ? custom : selectedAmount;
 
   recordPayment(currentScannedMember.id, amount);
-  alert(`Paiement de ${amount} FCFA validé pour ${currentScannedMember.name} !`);
+  alert(`✅ Paiement de ${amount} FCFA validé pour ${currentScannedMember.name} !`);
   
   document.getElementById('scan-result-card').classList.add('hidden');
   currentScannedMember = null;
 }
 
-// Modal d'affichage du QR Code
+// Modal QR Code Membre
 function showMemberQr(memberId, memberName) {
   document.getElementById('modal-member-name').innerText = memberName;
   const container = document.getElementById('qrcode-container');
@@ -381,9 +418,13 @@ function showMemberQr(memberId, memberName) {
     height: 200
   });
 
-  document.getElementById('qr-modal').classList.remove('hidden');
+  const modal = document.getElementById('qr-modal');
+  modal.style.display = 'flex';
+  modal.classList.remove('hidden');
 }
 
 function closeQrModal() {
-  document.getElementById('qr-modal').classList.add('hidden');
+  const modal = document.getElementById('qr-modal');
+  modal.style.display = 'none';
+  modal.classList.add('hidden');
 }
