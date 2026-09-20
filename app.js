@@ -4,13 +4,13 @@
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js')
-      .then(reg => console.log('✅ PWA : Service Worker enregistré avec succès !', reg))
-      .catch(err => console.error('❌ PWA : Erreur d\'enregistrement Service Worker :', err));
+      .then(reg => console.log('✅ PWA : Service Worker enregistré !', reg))
+      .catch(err => console.error('❌ PWA : Erreur Service Worker :', err));
   });
 }
 
 // ==========================================
-// 1. CONFIGURATION FIREBASE (REGISTRE EGLISE)
+// 1. CONFIGURATION FIREBASE
 // ==========================================
 const firebaseConfig = {
   apiKey: "AIzaSyBbU1LtQo01r17yLBoB6oxTW7303bLhQLU",
@@ -21,31 +21,43 @@ const firebaseConfig = {
   appId: "1:832296267584:web:e92d475bf60914f67e14a5"
 };
 
-// Initialisation de Firebase
 if (!firebase.apps.length) {
   firebase.initializeApp(firebaseConfig);
 }
 const db = firebase.firestore();
 
-// CLÉ MAÎTRE SEUL DEV.ASSAMOI CONNAÎT POUR CHANGER LE CODE PIN
-const DEV_MASTER_KEY = "DEV2026"; // Clé secrète développeur
+// CLÉ MAÎTRE DÉVELOPPEUR (Seul Dev.Assamoi peut modifier le PIN)
+const DEV_MASTER_KEY = "DEV2026";
 
-// ÉTATS DE L'APPLICATION
-let currentPin = "1234"; // PIN par défaut (modifiable depuis l'espace Dev)
+// ÉTATS GLOBAUX
+let currentPin = "1234";
 let membersData = [];
 let transactionsData = [];
 let html5QrCode = null;
 let currentScannedMember = null;
 let selectedAmount = 100;
+let isScannerRunning = false;
+
+// Fonctions utilitaires d'affichage sans conflit
+function showElement(el, displayType = 'block') {
+  if (!el) return;
+  el.classList.remove('hidden');
+  el.style.display = displayType;
+}
+
+function hideElement(el) {
+  if (!el) return;
+  el.classList.add('hidden');
+  el.style.display = 'none';
+}
 
 // ==========================================
-// 2. INITIALISATION AU CHARGEMENT DE LA PAGE
+// 2. INITIALISATION AU CHARGEMENT
 // ==========================================
 window.addEventListener('DOMContentLoaded', () => {
   syncPinCode();
   setupRealtimeSync();
-  
-  // Écoute de la touche Entrée sur l'écran PIN
+
   const pinInput = document.getElementById('pin-input');
   if (pinInput) {
     pinInput.addEventListener('keypress', (e) => {
@@ -57,35 +69,31 @@ window.addEventListener('DOMContentLoaded', () => {
 // ==========================================
 // 3. DÉVERROUILLAGE & GESTION DU CODE PIN
 // ==========================================
-
-// Écoute en direct du code PIN stocké sur Firestore Cloud
 function syncPinCode() {
   db.collection("config").doc("app_security").onSnapshot((doc) => {
     if (doc.exists && doc.data().pinCode) {
       currentPin = doc.data().pinCode.toString();
     } else {
-      // PIN par défaut (1234) si première utilisation
       db.collection("config").doc("app_security").set({ pinCode: "1234" });
     }
-  }, (error) => {
-    console.warn("Utilisation du PIN local par défaut (1234) en mode hors-ligne");
+  }, () => {
+    console.warn("Mode hors-ligne : PIN local (1234) utilisé");
   });
 }
 
-// Vérification du code PIN saisi par l'utilisateur
 function checkPinCode() {
   const enteredPin = document.getElementById('pin-input').value.trim();
   const errorMsg = document.getElementById('pin-error-msg');
+  const pinScreen = document.getElementById('pin-screen');
+  const mainApp = document.getElementById('main-app');
 
   if (enteredPin === currentPin) {
-    document.getElementById('pin-screen').style.display = 'none';
-    document.getElementById('main-app').classList.remove('app-hidden');
-    errorMsg.classList.add('hidden');
-    
-    // Fermer impérativement toute fenêtre modale ouverte
+    hideElement(pinScreen);
+    hideElement(errorMsg);
+    showElement(mainApp, 'block');
     closeAdminModal();
   } else {
-    errorMsg.classList.remove('hidden');
+    showElement(errorMsg, 'block');
     document.getElementById('pin-input').value = '';
   }
 }
@@ -93,59 +101,38 @@ function checkPinCode() {
 // ==========================================
 // 4. ESPACE ADMINISTRATION DEV.ASSAMOI
 // ==========================================
-
-// Ouverture de la modale Administrateur (Uniquement au clic sur le bouton Dev.Assamoi ⚙️)
 function openAdminModal() {
   const modal = document.getElementById('admin-modal');
   const authStep = document.getElementById('admin-auth-step');
   const changePinStep = document.getElementById('admin-change-pin-step');
 
-  // Réinitialiser les champs de texte
   document.getElementById('dev-master-key').value = '';
-  if (document.getElementById('new-pin-input')) {
-    document.getElementById('new-pin-input').value = '';
-  }
+  const newPinInput = document.getElementById('new-pin-input');
+  if (newPinInput) newPinInput.value = '';
 
-  // Étape 1 : AFFICHER la demande de Clé Maître
-  authStep.classList.remove('hidden');
-  authStep.style.display = 'block';
-
-  // Étape 2 : MASQUER la zone du nouveau PIN
-  changePinStep.classList.add('hidden');
-  changePinStep.style.display = 'none';
-
-  // Afficher la boîte modale
-  modal.classList.remove('hidden');
-  modal.style.display = 'flex';
+  showElement(authStep, 'block');
+  hideElement(changePinStep);
+  showElement(modal, 'flex');
 }
 
-// Fermeture de la modale administrateur
 function closeAdminModal() {
   const modal = document.getElementById('admin-modal');
-  if (modal) {
-    modal.classList.add('hidden');
-    modal.style.display = 'none';
-  }
+  hideElement(modal);
 }
 
-// Vérification de la Clé Maître Dev.Assamoi
 function verifyDevKey() {
   const key = document.getElementById('dev-master-key').value.trim();
-  
-  if (key === DEV_MASTER_KEY) {
-    // Masquer l'étape 1
-    document.getElementById('admin-auth-step').classList.add('hidden');
-    document.getElementById('admin-auth-step').style.display = 'none';
+  const authStep = document.getElementById('admin-auth-step');
+  const changePinStep = document.getElementById('admin-change-pin-step');
 
-    // Afficher l'étape 2 (Changement du PIN)
-    document.getElementById('admin-change-pin-step').classList.remove('hidden');
-    document.getElementById('admin-change-pin-step').style.display = 'block';
+  if (key === DEV_MASTER_KEY) {
+    hideElement(authStep);
+    showElement(changePinStep, 'block');
   } else {
-    alert("❌ Clé Maître Dev.Assamoi incorrecte ! Seul le développeur peut modifier le code PIN.");
+    alert("❌ Clé Maître Dev.Assamoi incorrecte !");
   }
 }
 
-// Enregistrement du nouveau PIN sur Firebase Cloud
 function saveNewPinCode() {
   const newPin = document.getElementById('new-pin-input').value.trim();
   if (newPin.length < 4) {
@@ -157,7 +144,7 @@ function saveNewPinCode() {
     pinCode: newPin,
     updatedAt: new Date().toISOString()
   }).then(() => {
-    alert(`✅ Nouveau code PIN enregistré avec succès : ${newPin}`);
+    alert(`✅ Nouveau code PIN enregistré : ${newPin}`);
     currentPin = newPin;
     closeAdminModal();
   }).catch((err) => {
@@ -166,11 +153,9 @@ function saveNewPinCode() {
 }
 
 // ==========================================
-// 5. SYNCHRONISATION TEMPS RÉEL FIREBASE
+// 5. SYNCHRONISATION FIREBASE EN TEMPS RÉEL
 // ==========================================
-
 function setupRealtimeSync() {
-  // Écoute instantanée des membres
   db.collection("members").onSnapshot((snapshot) => {
     membersData = [];
     snapshot.forEach((doc) => {
@@ -180,7 +165,6 @@ function setupRealtimeSync() {
     updateStats();
   });
 
-  // Écoute instantanée des transactions
   db.collection("transactions").orderBy("timestamp", "desc").onSnapshot((snapshot) => {
     transactionsData = [];
     snapshot.forEach((doc) => {
@@ -192,28 +176,23 @@ function setupRealtimeSync() {
 }
 
 // ==========================================
-// 6. ENREGISTREMENT ET CALCUL DES COTISATIONS
+// 6. GESTION DES COTISATIONS ET PAIEMENTS
 // ==========================================
-
 function handleAddMember(e) {
   e.preventDefault();
   const input = document.getElementById('member-name-input');
   const name = input.value.trim();
-
   if (!name) return;
 
-  const newMember = {
+  db.collection("members").add({
     name: name,
     paidUntil: null,
     createdAt: new Date().toISOString()
-  };
-
-  db.collection("members").add(newMember).then(() => {
+  }).then(() => {
     input.value = '';
   });
 }
 
-// Règle de calcul : 100 FCFA = 7 jours d'accès
 function recordPayment(memberId, amount) {
   const member = membersData.find(m => m.id === memberId);
   if (!member) return;
@@ -221,20 +200,19 @@ function recordPayment(memberId, amount) {
   const daysToAdd = Math.floor((amount / 100) * 7);
   let baseDate = new Date();
 
-  // Si le membre est déjà à jour, prolonger sa date d'échéance
-  if (member.paidUntil && new Date(member.paidUntil) > new Date()) {
-    baseDate = new Date(member.paidUntil);
+  // Vérification sécurisée de la date courante
+  if (member.paidUntil) {
+    const existingDate = new Date(member.paidUntil);
+    if (!isNaN(existingDate.getTime()) && existingDate > baseDate) {
+      baseDate = existingDate;
+    }
   }
 
   baseDate.setDate(baseDate.getDate() + daysToAdd);
   const newPaidUntil = baseDate.toISOString();
 
-  // Mise à jour sur Firestore Cloud
-  db.collection("members").doc(memberId).update({
-    paidUntil: newPaidUntil
-  });
+  db.collection("members").doc(memberId).update({ paidUntil: newPaidUntil });
 
-  // Ajout de la transaction
   db.collection("transactions").add({
     memberId: memberId,
     memberName: member.name,
@@ -245,9 +223,8 @@ function recordPayment(memberId, amount) {
 }
 
 // ==========================================
-// 7. AFFICHAGE DE L'INTERFACE UTILISATEUR
+// 7. AFFICHAGE DES MEMBRES ET STATISTIQUES
 // ==========================================
-
 function renderMembers() {
   const container = document.getElementById('members-list');
   const searchInput = document.getElementById('search-member');
@@ -342,7 +319,6 @@ function renderHistory() {
 // ==========================================
 // 8. NAVIGATION ET SCANNER DE QR CODE
 // ==========================================
-
 function switchTab(tabId, e) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
@@ -350,7 +326,7 @@ function switchTab(tabId, e) {
   const activeTab = document.getElementById(tabId);
   if (activeTab) activeTab.classList.add('active');
 
-  if (e && e.target) e.target.classList.add('active');
+  if (e && e.currentTarget) e.currentTarget.classList.add('active');
 
   if (tabId === 'tab-scan') {
     startScanner();
@@ -359,39 +335,68 @@ function switchTab(tabId, e) {
   }
 }
 
-function startScanner() {
+async function startScanner() {
+  if (isScannerRunning) return;
+
   if (!html5QrCode) {
     html5QrCode = new Html5Qrcode("qr-reader");
   }
-  html5QrCode.start(
-    { facingMode: "environment" },
-    { fps: 10, qrbox: { width: 220, height: 220 } },
-    (decodedText) => {
-      onQrCodeScanned(decodedText);
-    },
-    (errorMessage) => {}
-  ).catch(err => console.log(err));
+
+  try {
+    isScannerRunning = true;
+    await html5QrCode.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: { width: 220, height: 220 } },
+      (decodedText) => {
+        onQrCodeScanned(decodedText);
+      },
+      () => {}
+    );
+  } catch (err) {
+    console.error("Erreur de démarrage du scanner :", err);
+    isScannerRunning = false;
+  }
 }
 
-function stopScanner() {
-  if (html5QrCode && html5QrCode.isScanning) {
-    html5QrCode.stop().catch(err => console.log(err));
+async function stopScanner() {
+  if (html5QrCode && isScannerRunning) {
+    try {
+      await html5QrCode.stop();
+      isScannerRunning = false;
+    } catch (err) {
+      console.warn("Erreur lors de l'arrêt du scanner :", err);
+      isScannerRunning = false;
+    }
   }
 }
 
 function onQrCodeScanned(memberId) {
+  // Arrêt temporaire de la lecture pour éviter la boucle infinie
+  stopScanner();
+
   const member = membersData.find(m => m.id === memberId);
-  if (!member) return;
+  if (!member) {
+    alert("❌ QR Code invalide ou membre introuvable.");
+    startScanner(); // Relance si non trouvé
+    return;
+  }
 
   currentScannedMember = member;
   document.getElementById('scanned-member-name').innerText = member.name;
-  
+
   const isPaid = member.paidUntil && new Date(member.paidUntil) > new Date();
   const statusEl = document.getElementById('scanned-member-status');
   statusEl.innerText = isPaid ? "À jour" : "Non payé";
   statusEl.className = `status-badge ${isPaid ? 'success' : 'warning'}`;
 
-  document.getElementById('scan-result-card').classList.remove('hidden');
+  showElement(document.getElementById('scan-result-card'), 'block');
+}
+
+function setAmount(amount, e) {
+  selectedAmount = amount;
+  document.getElementById('custom-amount').value = amount;
+  document.querySelectorAll('.btn-amount').forEach(b => b.classList.remove('active'));
+  if (e && e.currentTarget) e.currentTarget.classList.add('active');
 }
 
 function confirmScannedPayment() {
@@ -401,9 +406,12 @@ function confirmScannedPayment() {
 
   recordPayment(currentScannedMember.id, amount);
   alert(`✅ Paiement de ${amount} FCFA validé pour ${currentScannedMember.name} !`);
-  
-  document.getElementById('scan-result-card').classList.add('hidden');
+
+  hideElement(document.getElementById('scan-result-card'));
   currentScannedMember = null;
+  
+  // Relance du scanner pour le prochain encaissement
+  startScanner();
 }
 
 // Modal QR Code Membre
@@ -418,13 +426,9 @@ function showMemberQr(memberId, memberName) {
     height: 200
   });
 
-  const modal = document.getElementById('qr-modal');
-  modal.style.display = 'flex';
-  modal.classList.remove('hidden');
+  showElement(document.getElementById('qr-modal'), 'flex');
 }
 
 function closeQrModal() {
-  const modal = document.getElementById('qr-modal');
-  modal.style.display = 'none';
-  modal.classList.add('hidden');
+  hideElement(document.getElementById('qr-modal'));
 }
