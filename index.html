@@ -6,7 +6,16 @@
   <title>Caisse Groupe Musical</title>
   <link rel="stylesheet" href="style.css">
   <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#ec4899">
+  
+  <!-- Couleur de thème mobile -->
+  <meta name="theme-color" content="#db2777">
+
+  <!-- Optimisation PWA iOS Apple -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Cotisations">
+  <link rel="apple-touch-icon" href="icon-192.png">
+
   <!-- Librairies CDN pour le QR Code et le Scanner -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
@@ -23,10 +32,10 @@
 
   <!-- Navigation par onglets -->
   <nav class="app-nav">
-    <button class="nav-btn active" onclick="switchTab('tab-home')">📊 Tableau</button>
-    <button class="nav-btn" onclick="switchTab('tab-scan')">📷 Scanner</button>
-    <button class="nav-btn" onclick="switchTab('tab-members')">👥 Membres</button>
-    <button class="nav-btn" onclick="switchTab('tab-history')">📜 Historique</button>
+    <button class="nav-btn active" onclick="switchTab('tab-home', event)">📊 Tableau</button>
+    <button class="nav-btn" onclick="switchTab('tab-scan', event)">📷 Scanner</button>
+    <button class="nav-btn" onclick="switchTab('tab-members', event)">👥 Membres</button>
+    <button class="nav-btn" onclick="switchTab('tab-history', event)">📜 Historique</button>
   </nav>
 
   <main class="app-container">
@@ -71,10 +80,10 @@
           <div class="amount-selector">
             <p><strong>Choisir le montant :</strong></p>
             <div class="amount-buttons">
-              <button onclick="setAmount(100)" class="btn-amount active">100 F (1 dim)</button>
-              <button onclick="setAmount(500)" class="btn-amount">500 F (1 mois)</button>
-              <button onclick="setAmount(1200)" class="btn-amount">1 200 F (3 mois)</button>
-              <button onclick="setAmount(5200)" class="btn-amount">5 200 F (1 an)</button>
+              <button onclick="setAmount(100, event)" class="btn-amount active">100 F (1 dim)</button>
+              <button onclick="setAmount(500, event)" class="btn-amount">500 F (1 mois)</button>
+              <button onclick="setAmount(1200, event)" class="btn-amount">1 200 F (3 mois)</button>
+              <button onclick="setAmount(5200, event)" class="btn-amount">5 200 F (1 an)</button>
             </div>
             <input type="number" id="custom-amount" value="100" placeholder="Autre montant" min="100" step="100">
           </div>
