@@ -41,7 +41,7 @@ let isScannerRunning = false;
 // Fonctions utilitaires d'affichage sans conflit
 function showElement(el, displayType = 'block') {
   if (!el) return;
-  el.classList.remove('hidden');
+  el.classList.remove('hidden', 'app-hidden'); // Retrait des deux classes de masquage
   el.style.display = displayType;
 }
 
@@ -82,7 +82,10 @@ function syncPinCode() {
 }
 
 function checkPinCode() {
-  const enteredPin = document.getElementById('pin-input').value.trim();
+  const pinInputEl = document.getElementById('pin-input');
+  if (!pinInputEl) return;
+
+  const enteredPin = pinInputEl.value.trim();
   const errorMsg = document.getElementById('pin-error-msg');
   const pinScreen = document.getElementById('pin-screen');
   const mainApp = document.getElementById('main-app');
@@ -94,7 +97,7 @@ function checkPinCode() {
     closeAdminModal();
   } else {
     showElement(errorMsg, 'block');
-    document.getElementById('pin-input').value = '';
+    pinInputEl.value = '';
   }
 }
 
@@ -200,7 +203,6 @@ function recordPayment(memberId, amount) {
   const daysToAdd = Math.floor((amount / 100) * 7);
   let baseDate = new Date();
 
-  // Vérification sécurisée de la date courante
   if (member.paidUntil) {
     const existingDate = new Date(member.paidUntil);
     if (!isNaN(existingDate.getTime()) && existingDate > baseDate) {
@@ -371,13 +373,12 @@ async function stopScanner() {
 }
 
 function onQrCodeScanned(memberId) {
-  // Arrêt temporaire de la lecture pour éviter la boucle infinie
   stopScanner();
 
   const member = membersData.find(m => m.id === memberId);
   if (!member) {
     alert("❌ QR Code invalide ou membre introuvable.");
-    startScanner(); // Relance si non trouvé
+    startScanner();
     return;
   }
 
@@ -410,11 +411,9 @@ function confirmScannedPayment() {
   hideElement(document.getElementById('scan-result-card'));
   currentScannedMember = null;
   
-  // Relance du scanner pour le prochain encaissement
   startScanner();
 }
 
-// Modal QR Code Membre
 function showMemberQr(memberId, memberName) {
   document.getElementById('modal-member-name').innerText = memberName;
   const container = document.getElementById('qrcode-container');
