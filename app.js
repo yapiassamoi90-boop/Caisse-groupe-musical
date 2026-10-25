@@ -41,7 +41,7 @@ let isScannerRunning = false;
 // Fonctions utilitaires d'affichage sans conflit
 function showElement(el, displayType = 'block') {
   if (!el) return;
-  el.classList.remove('hidden', 'app-hidden'); // Retrait des deux classes de masquage
+  el.classList.remove('hidden', 'app-hidden');
   el.style.display = displayType;
 }
 
@@ -224,6 +224,17 @@ function recordPayment(memberId, amount) {
   });
 }
 
+// Fonction pour supprimer une transaction enregistrée par erreur
+function deleteTransaction(transactionId) {
+  if (confirm("Voulez-vous vraiment supprimer cette transaction ? Le montant sera retiré de la caisse.")) {
+    db.collection("transactions").doc(transactionId).delete().then(() => {
+      // La mise à jour s'effectuera automatiquement grâce au onSnapshot de Firebase
+    }).catch((err) => {
+      alert("Erreur lors de la suppression : " + err.message);
+    });
+  }
+}
+
 // ==========================================
 // 7. AFFICHAGE DES MEMBRES ET STATISTIQUES
 // ==========================================
@@ -275,7 +286,7 @@ function promptManualPayment(memberId) {
 }
 
 function updateStats() {
-  const total = transactionsData.reduce((sum, t) => sum + (t.amount || 0), 0);
+  const total = transactionsData.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
   const paidCount = membersData.filter(m => m.paidUntil && new Date(m.paidUntil) > new Date()).length;
   const pendingCount = membersData.length - paidCount;
 
@@ -305,12 +316,15 @@ function renderHistory() {
   transactionsData.forEach((t, index) => {
     const dateStr = new Date(t.timestamp).toLocaleString('fr-FR');
     const html = `
-      <div class="history-item">
+      <div class="history-item" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f0f0f0;">
         <div>
           <strong>${t.memberName}</strong><br>
           <small style="color:#777; font-size:11px;">${dateStr}</small>
         </div>
-        <div class="amount-tag">+${t.amount} FCFA</div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div class="amount-tag">+${t.amount} FCFA</div>
+          <button onclick="deleteTransaction('${t.id}')" title="Supprimer cette transaction" style="background: #ff4d4d; color: white; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;">🗑️</button>
+        </div>
       </div>
     `;
     container.innerHTML += html;
