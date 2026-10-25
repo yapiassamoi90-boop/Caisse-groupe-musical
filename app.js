@@ -174,6 +174,7 @@ function setupRealtimeSync() {
       transactionsData.push({ id: doc.id, ...doc.data() });
     });
     renderHistory();
+    renderMembers(); // Met à jour aussi les totaux des membres en temps réel
     updateStats();
   });
 }
@@ -253,9 +254,18 @@ function renderMembers() {
     return;
   }
 
+  // Calcul du total versé par chaque membre individuellement à partir des transactions
+  const memberTotals = {};
+  transactionsData.forEach(t => {
+    if (t.memberId) {
+      memberTotals[t.memberId] = (memberTotals[t.memberId] || 0) + (Number(t.amount) || 0);
+    }
+  });
+
   filtered.forEach(m => {
     const isPaid = m.paidUntil && new Date(m.paidUntil) > new Date();
     const formattedDate = m.paidUntil ? new Date(m.paidUntil).toLocaleDateString('fr-FR') : '';
+    const totalPaidByMember = memberTotals[m.id] || 0;
 
     const div = document.createElement('div');
     div.className = 'member-item';
@@ -265,6 +275,7 @@ function renderMembers() {
         <span class="status-badge ${isPaid ? 'success' : 'warning'}">
           ${isPaid ? `À jour (jusqu'au ${formattedDate})` : 'Non payé'}
         </span>
+        <br><small style="color: #666; font-size: 12px;">Total versé : <strong>${totalPaidByMember.toLocaleString()} FCFA</strong></small>
       </div>
       <div class="member-actions">
         <button class="btn-action pay" onclick="promptManualPayment('${m.id}')">+ Payer</button>
