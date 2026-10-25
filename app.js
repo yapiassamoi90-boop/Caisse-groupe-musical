@@ -320,38 +320,18 @@ function renderHistory() {
     return;
   }
 
-  // Regroupement des transactions par membre pour n'afficher qu'une seule ligne par personne
-  const groupedTransactions = {};
-  transactionsData.forEach(t => {
-    const key = t.memberId || t.memberName;
-    if (!groupedTransactions[key]) {
-      groupedTransactions[key] = {
-        memberId: t.memberId,
-        memberName: t.memberName,
-        totalAmount: 0,
-        lastTimestamp: t.timestamp,
-        transactionIds: []
-      };
-    }
-    groupedTransactions[key].totalAmount += (Number(t.amount) || 0);
-    groupedTransactions[key].transactionIds.push(t.id);
-    if (new Date(t.timestamp) > new Date(groupedTransactions[key].lastTimestamp)) {
-      groupedTransactions[key].lastTimestamp = t.timestamp;
-    }
-  });
-
-  const uniqueTransactions = Object.values(groupedTransactions);
-
-  uniqueTransactions.forEach((t, index) => {
-    const dateStr = new Date(t.lastTimestamp).toLocaleString('fr-FR');
+  // Affiche toutes les transactions brutes avec leur bouton de suppression (🗑️) pour nettoyer les doublons
+  transactionsData.forEach((t, index) => {
+    const dateStr = new Date(t.timestamp).toLocaleString('fr-FR');
     const html = `
       <div class="history-item" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f0f0f0;">
         <div>
-          <strong>${t.memberName}</strong><br>
-          <small style="color:#777; font-size:11px;">Dernier paiement : ${dateStr}</small>
+          <strong>${t.memberName || t.name}</strong><br>
+          <small style="color:#777; font-size:11px;">${dateStr}</small>
         </div>
         <div style="display: flex; align-items: center; gap: 10px;">
-          <div class="amount-tag">+${t.totalAmount} FCFA</div>
+          <div class="amount-tag">+${t.amount} FCFA</div>
+          <button onclick="deleteTransaction('${t.id}')" title="Supprimer cette transaction" style="background: #ff4d4d; color: white; border: none; padding: 5px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;">🗑️</button>
         </div>
       </div>
     `;
